@@ -1,4 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+import.meta.env.VITE_SUPABASE_URL,
+import.meta.env.VITE_SUPABASE_ANON_KEY
+)
 
 const TABS = ['Customers', 'Inventory', 'Time Clock', 'Calendar', 'Goals']
 
@@ -50,56 +56,72 @@ const [event, setEvent] = useState({ title: '', date: '', time: '', notes: '' })
 const [goals, setGoals] = useState([])
 const [goal, setGoal] = useState({ text: '', period: 'Weekly' })
 
-const addCustomer = () => {
+useEffect(() => { loadAll() }, [])
+
+const loadAll = async () => {
+const [c, i, j, a, g] = await Promise.all([
+supabase.from('customers').select('*').order('created_at', { ascending: false }),
+supabase.from('inventory').select('*').order('created_at', { ascending: false }),
+supabase.from('jobs').select('*').order('created_at', { ascending: false }),
+supabase.from('appointments').select('*').order('date'),
+supabase.from('goals').select('*').order('created_at', { ascending: false }),
+])
+if (c.data) setCustomers(c.data)
+if (i.data) setInventory(i.data)
+if (j.data) setClocks(j.data)
+if (a.data) setEvents(a.data)
+if (g.data) setGoals(g.data)
+}
+
+const addCustomer = async () => {
 if (!form.name) return
-setCustomers([...customers, { ...form, id: Date.now() }])
+const { data } = await supabase.from('customers').insert([form]).select()
+if (data) setCustomers([...data, ...customers])
 setForm({ name: '', phone: '', address: '', service: '' })
 }
 
-const addItem = () => {
+const addItem = async () => {
 if (!item.name) return
-setInventory([...inventory, { ...item, id: Date.now() }])
+const { data } = await supabase.from('inventory').insert([item]).select()
+if (data) setInventory([...data, ...inventory])
 setItem({ name: '', cost: '' })
 }
 
-const clockIn = () => {
+const clockIn = async () => {
 if (!employee || !jobDesc) return
-setClocks([...clocks, {
-employee,
-job: jobDesc,
-in: new Date().toLocaleTimeString(),
-inTime: Date.now(),
-out: null,
-duration: null,
-id: Date.now()
-}])
+const entry = { employee, job: jobDesc, time_in: new Date().toLocaleTimeString(), time_out: null, duration: null }
+const { data } = await supabase.from('jobs').insert([entry]).select()
+if (data) setClocks([...data, ...clocks])
 setEmployee('')
 setJobDesc('')
 }
 
-const clockOut = (id) => {
-setClocks(clocks.map(c => {
-if (c.id === id && !c.out) {
-const mins = Math.round((Date.now() - c.inTime) / 60000)
-const hrs = Math.floor(mins / 60)
-const rem = mins % 60
-const duration = hrs > 0 ? `${hrs}h ${rem}m` : `${rem}m`
-return { ...c, out: new Date().toLocaleTimeString(), duration }
-}
-return c
-}))
+const clockOut = async (id) => {
+const job = clocks.find(c => c.id === id)
+if (!job || job.time_out) return
+const time_out = new Date().toLocaleTimeString()
+const duration = 'Job complete'
+await supabase.from('jobs').update({ time_out, duration }).eq('id', id)
+setClocks(clocks.map(c => c.id === id ? { ...c, time_out, duration } : c))
 }
 
-const addEvent = () => {
+const addEvent = async () => {
 if (!event.title || !event.date) return
-setEvents([...events, { ...event, id: Date.now() }].sort((a, b) => new Date(a.date) - new Date(b.date)))
+const { data } = await supabase.from('appointments').insert([event]).select()
+if (data) setEvents([...events, ...data].sort((a, b) => new Date(a.date) - new Date(b.date)))
 setEvent({ title: '', date: '', time: '', notes: '' })
 }
 
-const addGoal = () => {
+const addGoal = async () => {
 if (!goal.text) return
-setGoals([...goals, { ...goal, id: Date.now(), done: false }])
+const { data } = await supabase.from('goals').insert([{ ...goal, done: false }]).select()
+if (data) setGoals([...data, ...goals])
 setGoal({ text: '', period: 'Weekly' })
+}
+
+const toggleGoal = async (id, done) => {
+await supabase.from('goals').update({ done: !done }).eq('id', id)
+setGoals(goals.map(g => g.id === id ? { ...g, done: !done } : g))
 }
 
 const total = inventory.reduce((sum, i) => sum + parseFloat(i.cost || 0), 0)
@@ -176,9 +198,9 @@ return (
 <div key={c.id} style={s.card}>
 <strong style={{color: colors.accent}}>{c.employee}</strong><br />
 <span style={{color: colors.text}}>{c.job}</span><br />
-<span style={{color: colors.blue}}>Started: {c.in}</span><br />
-{c.out
-? <span style={{color: '#00ff99'}}>Finished: {c.out} — <strong>{c.duration}</strong></span>
+<span style={{color: colors.blue}}>Started: {c.time_in}</span><br />
+{c.time_out
+? <span style={{color: '#00ff99'}}>Finished: {c.time_out}</span>
 : <button style={{...s.btnBlue, marginTop: 8}} onClick={() => clockOut(c.id)}>Finish Job</button>
 }
 </div>
@@ -229,7 +251,7 @@ return (
 {goals.filter(g => g.period === period).map(g => (
 <div key={g.id} style={{...s.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
 <span style={{color: g.done ? '#00ff99' : colors.text, textDecoration: g.done ? 'line-through' : 'none'}}>{g.text}</span>
-<button style={g.done ? {...s.btnBlue, background: '#00ff99', color: '#000'} : s.btnBlue} onClick={() => setGoals(goals.map(x => x.id === g.id ? {...x, done: !x.done} : x))}>
+<button style={g.done ? {...s.btnBlue, background: '#00ff99', color: '#000'} : s.btnBlue} onClick={() => toggleGoal(g.id, g.done)}>
 {g.done ? '✅' : 'Done'}
 </button>
 </div>
