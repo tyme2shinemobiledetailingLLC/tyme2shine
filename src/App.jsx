@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const TABS = ['Customers', 'Inventory', 'Time Clock', 'Calendar']
+const TABS = ['Customers', 'Inventory', 'Time Clock', 'Calendar', 'Goals']
 
 const colors = {
 bg: '#0a0a0a',
@@ -33,14 +33,21 @@ label: { color: colors.subtext, fontSize: 12, marginBottom: 4 },
 
 export default function App() {
 const [tab, setTab] = useState('Customers')
+
 const [customers, setCustomers] = useState([])
 const [form, setForm] = useState({ name: '', phone: '', address: '', service: '' })
+
 const [inventory, setInventory] = useState([])
 const [item, setItem] = useState({ name: '', cost: '' })
+
 const [clocks, setClocks] = useState([])
 const [employee, setEmployee] = useState('')
+
 const [events, setEvents] = useState([])
 const [event, setEvent] = useState({ title: '', date: '', time: '', notes: '' })
+
+const [goals, setGoals] = useState([])
+const [goal, setGoal] = useState({ text: '', period: 'Weekly' })
 
 const addCustomer = () => {
 if (!form.name) return
@@ -68,6 +75,12 @@ const addEvent = () => {
 if (!event.title || !event.date) return
 setEvents([...events, { ...event, id: Date.now() }].sort((a, b) => new Date(a.date) - new Date(b.date)))
 setEvent({ title: '', date: '', time: '', notes: '' })
+}
+
+const addGoal = () => {
+if (!goal.text) return
+setGoals([...goals, { ...goal, id: Date.now(), done: false }])
+setGoal({ text: '', period: 'Weekly' })
 }
 
 const total = inventory.reduce((sum, i) => sum + parseFloat(i.cost || 0), 0)
@@ -174,6 +187,36 @@ return (
 ))}
 </div>
 )}
+
+{tab === 'Goals' && (
+<div>
+<h2 style={s.sectionTitle}>🎯 Add Goal</h2>
+<div style={s.label}>Goal</div>
+<input style={s.input} placeholder="e.g. Book 10 details this month" value={goal.text} onChange={e => setGoal({...goal, text: e.target.value})} />
+<div style={s.label}>Timeframe</div>
+<select style={s.input} value={goal.period} onChange={e => setGoal({...goal, period: e.target.value})}>
+<option value="Weekly">Weekly</option>
+<option value="Monthly">Monthly</option>
+<option value="Yearly">Yearly</option>
+</select>
+<button style={s.btn} onClick={addGoal}>Add Goal</button>
+{['Weekly', 'Monthly', 'Yearly'].map(period => (
+<div key={period}>
+<h2 style={{...s.sectionTitle, marginTop: 24}}>{period} Goals</h2>
+{goals.filter(g => g.period === period).length === 0 && <p style={{color: colors.subtext}}>No {period.toLowerCase()} goals yet.</p>}
+{goals.filter(g => g.period === period).map(g => (
+<div key={g.id} style={{...s.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+<span style={{color: g.done ? '#00ff99' : colors.text, textDecoration: g.done ? 'line-through' : 'none'}}>{g.text}</span>
+<button style={g.done ? {...s.btnBlue, background: '#00ff99', color: '#000'} : s.btnBlue} onClick={() => setGoals(goals.map(x => x.id === g.id ? {...x, done: !x.done} : x))}>
+{g.done ? '✅' : 'Done'}
+</button>
+</div>
+))}
+</div>
+))}
+</div>
+)}
+
 </div>
 )
 }
