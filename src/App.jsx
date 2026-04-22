@@ -42,6 +42,7 @@ const [item, setItem] = useState({ name: '', cost: '' })
 
 const [clocks, setClocks] = useState([])
 const [employee, setEmployee] = useState('')
+const [jobDesc, setJobDesc] = useState('')
 
 const [events, setEvents] = useState([])
 const [event, setEvent] = useState({ title: '', date: '', time: '', notes: '' })
@@ -62,13 +63,31 @@ setItem({ name: '', cost: '' })
 }
 
 const clockIn = () => {
-if (!employee) return
-setClocks([...clocks, { employee, in: new Date().toLocaleTimeString(), out: null, id: Date.now() }])
+if (!employee || !jobDesc) return
+setClocks([...clocks, {
+employee,
+job: jobDesc,
+in: new Date().toLocaleTimeString(),
+inTime: Date.now(),
+out: null,
+duration: null,
+id: Date.now()
+}])
 setEmployee('')
+setJobDesc('')
 }
 
 const clockOut = (id) => {
-setClocks(clocks.map(c => c.id === id && !c.out ? { ...c, out: new Date().toLocaleTimeString() } : c))
+setClocks(clocks.map(c => {
+if (c.id === id && !c.out) {
+const mins = Math.round((Date.now() - c.inTime) / 60000)
+const hrs = Math.floor(mins / 60)
+const rem = mins % 60
+const duration = hrs > 0 ? `${hrs}h ${rem}m` : `${rem}m`
+return { ...c, out: new Date().toLocaleTimeString(), duration }
+}
+return c
+}))
 }
 
 const addEvent = () => {
@@ -145,19 +164,22 @@ return (
 
 {tab === 'Time Clock' && (
 <div>
-<h2 style={s.sectionTitle}>⏱ Clock In</h2>
+<h2 style={s.sectionTitle}>⏱ Start Job</h2>
 <div style={s.label}>Employee Name</div>
 <input style={s.input} placeholder="Employee name" value={employee} onChange={e => setEmployee(e.target.value)} />
-<button style={s.btn} onClick={clockIn}>Clock In</button>
-<h2 style={{...s.sectionTitle, marginTop: 24}}>📋 Time Entries</h2>
-{clocks.length === 0 && <p style={{color: colors.subtext}}>No entries yet.</p>}
+<div style={s.label}>Job Description</div>
+<input style={s.input} placeholder="e.g. Full detail - Honda Civic" value={jobDesc} onChange={e => setJobDesc(e.target.value)} />
+<button style={s.btn} onClick={clockIn}>Start Job</button>
+<h2 style={{...s.sectionTitle, marginTop: 24}}>📋 Job Entries</h2>
+{clocks.length === 0 && <p style={{color: colors.subtext}}>No jobs yet.</p>}
 {clocks.map(c => (
 <div key={c.id} style={s.card}>
 <strong style={{color: colors.accent}}>{c.employee}</strong><br />
-<span style={{color: colors.blue}}>In: {c.in}</span><br />
+<span style={{color: colors.text}}>{c.job}</span><br />
+<span style={{color: colors.blue}}>Started: {c.in}</span><br />
 {c.out
-? <span style={{color: '#00ff99'}}>Out: {c.out}</span>
-: <button style={{...s.btnBlue, marginTop: 8}} onClick={() => clockOut(c.id)}>Clock Out</button>
+? <span style={{color: '#00ff99'}}>Finished: {c.out} — <strong>{c.duration}</strong></span>
+: <button style={{...s.btnBlue, marginTop: 8}} onClick={() => clockOut(c.id)}>Finish Job</button>
 }
 </div>
 ))}
