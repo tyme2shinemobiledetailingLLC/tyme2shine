@@ -225,7 +225,7 @@ return (
 {events.map(ev => (
 <div key={ev.id} style={s.calCard}>
 <strong style={{color: colors.accent}}>{ev.title}</strong><br />
-<span style={{color: colors.blue}}>📅 {ev.date} {ev.time && `@ ${ev.time}`}</span><br />
+<span style={{color: colors.blue}}>📅 {ev.date} {ev.time && `@ ${new Date('1970-01-01T' + ev.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}</span><br />
 {ev.notes && <em style={{color: colors.subtext}}>{ev.notes}</em>}
 </div>
 ))}
