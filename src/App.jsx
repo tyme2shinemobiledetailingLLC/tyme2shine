@@ -16,7 +16,7 @@ blue: '#1E90FF',
 text: '#ffffff',
 subtext: '#aaaaaa',
 input: '#2a2a4a',
-border: '#FFD700',
+red: '#ff4444',
 }
 
 const s = {
@@ -30,11 +30,19 @@ activeTab: { padding: '8px 16px', cursor: 'pointer', border: `1px solid ${colors
 input: { padding: 10, border: `1px solid ${colors.blue}`, borderRadius: 6, width: '100%', marginBottom: 10, boxSizing: 'border-box', background: colors.input, color: colors.text },
 btn: { padding: '10px 20px', background: colors.accent, color: '#000', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' },
 btnBlue: { padding: '8px 14px', background: colors.blue, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold' },
+btnRed: { padding: '8px 14px', background: colors.red, color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 'bold', marginTop: 8 },
 card: { border: `1px solid ${colors.blue}`, borderRadius: 8, padding: 14, marginBottom: 10, background: colors.card },
 sectionTitle: { color: colors.accent, borderBottom: `1px solid ${colors.blue}`, paddingBottom: 6, marginBottom: 14 },
 total: { marginTop: 12, fontSize: 20, color: colors.accent, fontWeight: 'bold' },
 calCard: { border: `1px solid ${colors.accent}`, borderRadius: 8, padding: 14, marginBottom: 10, background: colors.card },
 label: { color: colors.subtext, fontSize: 12, marginBottom: 4 },
+}
+
+const formatTime = (t) => {
+if (!t) return ''
+try {
+return new Date('1970-01-01T' + t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+} catch { return t }
 }
 
 export default function App() {
@@ -75,22 +83,35 @@ if (g.data) setGoals(g.data)
 
 const addCustomer = async () => {
 if (!form.name) return
-const { data } = await supabase.from('customers').insert([form]).select()
+const { data, error } = await supabase.from('customers').insert([form]).select()
+if (error) { alert('Error: ' + error.message); return }
 if (data) setCustomers([...data, ...customers])
 setForm({ name: '', phone: '', address: '', service: '' })
 }
 
+const deleteCustomer = async (id) => {
+await supabase.from('customers').delete().eq('id', id)
+setCustomers(customers.filter(c => c.id !== id))
+}
+
 const addItem = async () => {
 if (!item.name) return
-const { data } = await supabase.from('inventory').insert([item]).select()
+const { data, error } = await supabase.from('inventory').insert([item]).select()
+if (error) { alert('Error: ' + error.message); return }
 if (data) setInventory([...data, ...inventory])
 setItem({ name: '', cost: '' })
+}
+
+const deleteItem = async (id) => {
+await supabase.from('inventory').delete().eq('id', id)
+setInventory(inventory.filter(i => i.id !== id))
 }
 
 const clockIn = async () => {
 if (!employee || !jobDesc) return
 const entry = { employee, job: jobDesc, time_in: new Date().toLocaleTimeString(), time_out: null, duration: null }
-const { data } = await supabase.from('jobs').insert([entry]).select()
+const { data, error } = await supabase.from('jobs').insert([entry]).select()
+if (error) { alert('Error: ' + error.message); return }
 if (data) setClocks([...data, ...clocks])
 setEmployee('')
 setJobDesc('')
@@ -105,16 +126,28 @@ await supabase.from('jobs').update({ time_out, duration }).eq('id', id)
 setClocks(clocks.map(c => c.id === id ? { ...c, time_out, duration } : c))
 }
 
+const deleteJob = async (id) => {
+await supabase.from('jobs').delete().eq('id', id)
+setClocks(clocks.filter(c => c.id !== id))
+}
+
 const addEvent = async () => {
 if (!event.title || !event.date) return
-const { data } = await supabase.from('appointments').insert([event]).select()
+const { data, error } = await supabase.from('appointments').insert([event]).select()
+if (error) { alert('Error: ' + error.message); return }
 if (data) setEvents([...events, ...data].sort((a, b) => new Date(a.date) - new Date(b.date)))
 setEvent({ title: '', date: '', time: '', notes: '' })
 }
 
+const deleteEvent = async (id) => {
+await supabase.from('appointments').delete().eq('id', id)
+setEvents(events.filter(e => e.id !== id))
+}
+
 const addGoal = async () => {
 if (!goal.text) return
-const { data } = await supabase.from('goals').insert([{ ...goal, done: false }]).select()
+const { data, error } = await supabase.from('goals').insert([{ ...goal, done: false }]).select()
+if (error) { alert('Error: ' + error.message); return }
 if (data) setGoals([...data, ...goals])
 setGoal({ text: '', period: 'Weekly' })
 }
@@ -122,6 +155,11 @@ setGoal({ text: '', period: 'Weekly' })
 const toggleGoal = async (id, done) => {
 await supabase.from('goals').update({ done: !done }).eq('id', id)
 setGoals(goals.map(g => g.id === id ? { ...g, done: !done } : g))
+}
+
+const deleteGoal = async (id) => {
+await supabase.from('goals').delete().eq('id', id)
+setGoals(goals.filter(g => g.id !== id))
 }
 
 const total = inventory.reduce((sum, i) => sum + parseFloat(i.cost || 0), 0)
@@ -158,7 +196,8 @@ return (
 <strong style={{color: colors.accent}}>{c.name}</strong> &nbsp;
 <span style={{color: colors.blue}}>{c.phone}</span><br />
 <span style={{color: colors.subtext}}>{c.address}</span><br />
-<em style={{color: colors.text}}>{c.service}</em>
+<em style={{color: colors.text}}>{c.service}</em><br />
+<button style={s.btnRed} onClick={() => deleteCustomer(c.id)}>🗑 Remove</button>
 </div>
 ))}
 </div>
@@ -177,7 +216,8 @@ return (
 {inventory.map(i => (
 <div key={i.id} style={s.card}>
 <span style={{color: colors.text}}>{i.name}</span> —{' '}
-<strong style={{color: colors.accent}}>${parseFloat(i.cost).toFixed(2)}</strong>
+<strong style={{color: colors.accent}}>${parseFloat(i.cost).toFixed(2)}</strong><br />
+<button style={s.btnRed} onClick={() => deleteItem(i.id)}>🗑 Remove</button>
 </div>
 ))}
 <div style={s.total}>💰 Total: ${total.toFixed(2)}</div>
@@ -202,7 +242,8 @@ return (
 {c.time_out
 ? <span style={{color: '#00ff99'}}>Finished: {c.time_out}</span>
 : <button style={{...s.btnBlue, marginTop: 8}} onClick={() => clockOut(c.id)}>Finish Job</button>
-}
+}<br />
+<button style={s.btnRed} onClick={() => deleteJob(c.id)}>🗑 Remove</button>
 </div>
 ))}
 </div>
@@ -225,8 +266,9 @@ return (
 {events.map(ev => (
 <div key={ev.id} style={s.calCard}>
 <strong style={{color: colors.accent}}>{ev.title}</strong><br />
-<span style={{color: colors.blue}}>📅 {ev.date} {ev.time && `@ ${new Date('1970-01-01T' + ev.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}</span><br />
-{ev.notes && <em style={{color: colors.subtext}}>{ev.notes}</em>}
+<span style={{color: colors.blue}}>📅 {ev.date} {ev.time && `@ ${formatTime(ev.time)}`}</span><br />
+{ev.notes && <em style={{color: colors.subtext}}>{ev.notes}</em>}<br />
+<button style={s.btnRed} onClick={() => deleteEvent(ev.id)}>🗑 Remove</button>
 </div>
 ))}
 </div>
@@ -251,9 +293,12 @@ return (
 {goals.filter(g => g.period === period).map(g => (
 <div key={g.id} style={{...s.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
 <span style={{color: g.done ? '#00ff99' : colors.text, textDecoration: g.done ? 'line-through' : 'none'}}>{g.text}</span>
+<div style={{display: 'flex', gap: 8}}>
 <button style={g.done ? {...s.btnBlue, background: '#00ff99', color: '#000'} : s.btnBlue} onClick={() => toggleGoal(g.id, g.done)}>
 {g.done ? '✅' : 'Done'}
 </button>
+<button style={{...s.btnRed, marginTop: 0}} onClick={() => deleteGoal(g.id)}>🗑</button>
+</div>
 </div>
 ))}
 </div>
