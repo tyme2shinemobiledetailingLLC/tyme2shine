@@ -62,7 +62,8 @@ export default function App() {
   const [jobDesc, setJobDesc] = useState('')
 
   const [events, setEvents] = useState([])
-  const [event, setEvent] = useState({ title: '', date: '', time: '', notes: '' })
+  const [event, setEvent] = useState({ title: '', date: '', time: '', notes: '', customer_phone: '', customer_address: '' })
+  const [unableReasons, setUnableReasons] = useState({})
 
   const [goals, setGoals] = useState([])
   const [goal, setGoal] = useState({ text: '', period: 'Weekly' })
@@ -142,15 +143,21 @@ export default function App() {
 
   const addEvent = async () => {
     if (!event.title || !event.date) return
-    const { data, error } = await supabase.from('appointments').insert([event]).select()
+    const { data, error } = await supabase.from('appointments').insert([{ ...event, status: 'pending' }]).select()
     if (error) { alert('Error: ' + error.message); return }
     if (data) setEvents([...events, ...data].sort((a, b) => new Date(a.date) - new Date(b.date)))
-    setEvent({ title: '', date: '', time: '', notes: '' })
+    setEvent({ title: '', date: '', time: '', notes: '', customer_phone: '', customer_address: '' })
   }
 
   const deleteEvent = async (id) => {
     await supabase.from('appointments').delete().eq('id', id)
     setEvents(events.filter(e => e.id !== id))
+  }
+
+  const updateEventStatus = async (id, status, reason = null) => {
+    const update = { status, unable_reason: reason }
+    await supabase.from('appointments').update(update).eq('id', id)
+    setEvents(events.map(e => e.id === id ? { ...e, status, unable_reason: reason } : e))
   }
 
   const addGoal = async () => {
@@ -185,6 +192,18 @@ export default function App() {
   }
 
   const total = inventory.reduce((sum, i) => sum + parseFloat(i.cost || 0), 0)
+
+  const statusColor = (status) => {
+    if (status === 'finished') return colors.green
+    if (status === 'unable') return colors.red
+    return colors.subtext
+  }
+
+  const statusLabel = (status) => {
+    if (status === 'finished') return '✅ Job Finished'
+    if (status === 'unable') return '❌ Unable to Finish'
+    return '⏳ Pending'
+  }
 
   return (
     <div style={s.app}>
@@ -276,6 +295,10 @@ export default function App() {
           <h2 style={s.sectionTitle}>➕ Add Appointment</h2>
           <div style={s.label}>Title</div>
           <input style={s.input} placeholder="e.g. Full detail - John's truck" value={event.title} onChange={e => setEvent({...event, title: e.target.value})} />
+          <div style={s.label}>Customer Phone</div>
+          <input style={s.input} placeholder="Customer phone number" value={event.customer_phone} onChange={e => setEvent({...event, customer_phone: e.target.value})} />
+          <div style={s.label}>Customer Address</div>
+          <input style={s.input} placeholder="Customer address" value={event.customer_address} onChange={e => setEvent({...event, customer_address: e.target.value})} />
           <div style={s.label}>Date</div>
           <input style={s.input} type="date" value={event.date} onChange={e => setEvent({...event, date: e.target.value})} />
           <div style={s.label}>Time</div>
@@ -286,10 +309,54 @@ export default function App() {
           <h2 style={{...s.sectionTitle, marginTop: 24}}>📅 Upcoming Appointments ({events.length})</h2>
           {events.length === 0 && <p style={{color: colors.subtext}}>No appointments yet.</p>}
           {events.map(ev => (
-            <div key={ev.id} style={s.calCard}>
+            <div key={ev.id} style={{...s.calCard, borderColor: statusColor(ev.status)}}>
               <strong style={{color: colors.accent}}>{ev.title}</strong><br />
+              {ev.customer_phone && <span style={{color: colors.blue}}>📞 {ev.customer_phone}</span>}{ev.customer_phone && <br />}
+              {ev.customer_address && <span style={{color: colors.subtext}}>📍 {ev.customer_address}</span>}{ev.customer_address && <br />}
               <span style={{color: colors.blue}}>📅 {ev.date} {ev.time && `@ ${formatTime(ev.time)}`}</span><br />
-              {ev.notes && <em style={{color: colors.subtext}}>{ev.notes}</em>}<br />
+              {ev.notes && <em style={{color: colors.subtext}}>{ev.notes}</em>}{ev.notes && <br />}
+              <span style={{color: statusColor(ev.status), fontWeight: 'bold', fontSize: 13}}>{statusLabel(ev.status)}</span>
+              {ev.status === 'unable' && ev.unable_reason && (
+                <p style={{color: colors.red, margin: '4px 0', fontSize: 13}}>Reason: {ev.unable_reason}</p>
+              )}
+              {ev.status === 'pending' && (
+                <div style={{marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <input type="checkbox" onChange={(e) => { if (e.target.checked) updateEventStatus(ev.id, 'finished') }} />
+                    <span style={{color: colors.green}}>Job Finished</span>
+                  </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap'}}>
+                    <input
+                      type="checkbox"
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setUnableReasons({...unableReasons, [ev.id]: ''})
+                        } else {
+                          const r = {...unableReasons}
+                          delete r[ev.id]
+                          setUnableReasons(r)
+                        }
+                      }}
+                    />
+                    <span style={{color: colors.red}}>Unable to Finish</span>
+                  </div>
+                  {unableReasons[ev.id] !== undefined && (
+                    <div style={{display: 'flex', gap: 8}}>
+                      <input
+                        style={{...s.input, marginBottom: 0, flex: 1}}
+                        placeholder="Reason..."
+                        value={unableReasons[ev.id]}
+                        onChange={e => setUnableReasons({...unableReasons, [ev.id]: e.target.value})}
+                      />
+                      <button style={s.btnRed} onClick={() => updateEventStatus(ev.id, 'unable', unableReasons[ev.id])}>Save</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {ev.status !== 'pending' && (
+                <button style={{...s.btnBlue, marginTop: 8}} onClick={() => updateEventStatus(ev.id, 'pending', null)}>Reset Status</button>
+              )}
+              <br />
               <button style={s.btnRed} onClick={() => deleteEvent(ev.id)}>🗑 Remove</button>
             </div>
           ))}
